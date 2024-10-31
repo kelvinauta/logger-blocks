@@ -15,7 +15,6 @@ class Log { // individual log
 
         // defaults config
         this.separator = " | ";
-        this.time = true;
 
         // clusters
         this.log_data = null;
@@ -23,8 +22,7 @@ class Log { // individual log
   
     run(){
        // validate
-       if(!this.message) throw new Error("Message is required");
-       if(!this.type) throw new Error("Type is required");
+       this._validate_params();
 
        // logic
        this.log_data = this._build_log();
@@ -35,8 +33,8 @@ class Log { // individual log
     }
 
     // setters
-    set_message(message){
-        this.message = message;
+    set_message(...messages){
+        this.message = this._build_message(...messages);
         return this;
     }
     set_type(type){
@@ -52,6 +50,42 @@ class Log { // individual log
         return this;
     }
 
+    // getters
+    get_log_data(){
+        return this.log_data;
+    }
+    get_log(){
+       return this.log_data.simple_out_log;
+    }
+    get_style_log(){
+       return this.log_data.out_log;
+    }
+
+    _build_message(...messages) {
+        // Tratamiento del input de los mensajes
+        if (!(messages?.length > 0)) throw new Error("Messages is required");
+        let result = "";
+        messages.forEach((msg, i) => {
+           if(!msg) return;
+  
+           const is_last = i < messages.length - 1;
+           result += `${this._format_message(msg)}${is_last ? " " : ""}`; // Añade un espacio si no es el último mensaje
+        });
+        return result;
+     }
+     _format_message(message) {
+        // validate
+        if (!message) throw new Error("Message is required"); // Si no hay mensaje no hace nada
+
+        // logic
+        if(typeof message !== "object") return message;
+
+        let result = "";
+        result += `\n`;
+        result += JSON.stringify(message, null, 2);
+        result += `\n`; 
+        return result;
+     }
     _build_log() {
         // Validate
         if(!this.message) throw new Error("Message is required");
@@ -63,8 +97,8 @@ class Log { // individual log
         const style_log = this.style_log[this.type](this.message)
         const simple_log = `${this.type}: ${this.message}`;
         const now_iso = now.toISOString();
-        const out_log = `${style_log}${this.separator}${this.time ? `${now_iso}` : ""}`; // With Style
-        const simple_out_log = `${simple_log}${this.separator}${this.time ? `${now_iso}` : ""}`; // Simple
+        const out_log = `${style_log}${this.separator}${now_iso}`; // With Style
+        const simple_out_log = `${simple_log}${this.separator}${now_iso}`; // Simple
         const log_data = {
            id: this.id,
            type: this.type,
@@ -113,6 +147,13 @@ class Log { // individual log
         if(!log_data.type) throw new Error("Log data is required");
         if(!log_data.message) throw new Error("Log data is required");
         if(!log_data.time) throw new Error("Log data is required");
+     }
+     _validate_params(){
+        if(!this.message) throw new Error("Message is required");
+        if(!this.type) throw new Error("Type is required");
+        if(typeof this.type !== "string") throw new Error("Type must be a string");
+        if(typeof this.prefix !== "string") throw new Error("Prefix must be a string");
+        
      }
 }
 

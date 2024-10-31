@@ -1,307 +1,236 @@
 // TODO: Convertir este código en una librería que se pueda reutilizar en otros proyectos
-const chalk = require('chalk');
-const uuid = require('uuid');
-const fs = require('fs-extra');
-const Log = require('./log.js');
+const chalk = require("chalk");
+const uuid = require("uuid");
+const fs = require("fs-extra");
+const Log = require("./log.js");
 
 class LOGGER {
-   constructor({
-      id = uuid.v4(),
-      title,
-      description,
-      prompt,
-      save = true,
-      path = "./logs", // Ruta por defecto
-      prefix,
-      timeout = 15000, // Tiempo por defecto para guardar un bloque de logs
-      time_start = new Date(),
-      time = true, separator = " | ",
-      separator_vertical = `------------------\n`,
-      print_end = true,
-      emojis = true,
-      save_json = false
-   }) {
-      this.id = id; // ID del logger
-      this.title = title; // Nombre del logger
-      this.description = description; // Para qué se usará el logger
-      this.conclusion_log; // Log de conclusión del hilo de logs
-      this.conclusion_type; // Tipo de log de conclusión del hilo de logs (info, warn, error, success, silly)
-      this.prompt = prompt; // Prompt por defecto del logger para análisis de IA
-      this.save = save; // Guardar o no guardar el log
-      this.path = path; // Ruta donde se guardará el log
-      this.prefix = prefix; // Prefijo de los archivos de log
-      this.logs = []; // Logs en memoria
-      this.type; // Tipo de log (info, warn, error, success, silly)
-      this.timeout = timeout; // Tiempo de espera para guardar un bloque de logs
-      this.set_timeout;
-      this.time_start = time_start; // Tiempo de inicio del bloque de logs
-      this.time_end; // Tiempo de fin del hilo de los logs
-      this.style_log = new STYLE_LOG({}); // Estilo de los logs
-      this.time = time; // Mostrar o no el tiempo en cada log
-      this.separator = separator; // Separador de logs
-      this.separator_vertical = separator_vertical; // Separador de bloques de logs
-      this.print_end = print_end; // Imprimir el bloque de logs al finalizar
-      this.auto_save = (this.save && (this.timeout === 0)) ? true : false; // Guardar automáticamente cada log sin Bloques
-      this.emojis = emojis; // Mostrar o no emojis en los logs
-      this.save_json = save_json; // Guardar los logs en formato json
-   }
+	constructor({
+		title,
+		save = true,
+		base_path = "./.logs", 
+      all_logs_path = "./.logs/all_logs.log", 
+		timeout = 15000, // Tiempo por defecto para guardar un bloque de logs
+	}) {
+		// Frequently user configuration
+		this.title = title; // Nombre del logger
+		this.save = save;
+		this.timeout = timeout; // Tiempo de espera para guardar un bloque de logs
+		this.base_path = base_path; // Ruta donde se guardará el log
+		this.all_logs_path = all_logs_path; // Ruta donde se guardará el log de todos los logs
 
-   // Setters
-   Title(title) {
-      this.title = title;
+		// Default configuration
+		this.id = uuid.v4(); // ID del logger
+		this.separator = " | "; // Separador de logs
+		this.separator_vertical = `------------------`; // Separador de bloques de logs
+
+		// Private
+		this.logs = []; // Logs en memoria
+		this.path = this._build_path(); // Ruta del archivo de logs
+      this.timer; // Temporizador
+      this.time_start; // Tiempo de inicio
+      this.time_end; // Tiempo de fin
+	}
+
+	// Public Methods
+	log(...messages) {
+		this._new_log(messages, "info");
+		return this;
+	}
+	info(...messages) {
+		this._new_log(messages, "info");
+		return this;
+	}
+	warn(...messages) {
+		this._new_log(messages, "warn");
+		return this;
+	}
+	error(...messages) {
+		this._new_log(messages, "error");
+		return this;
+	}
+	success(...messages) {
+		this._new_log(messages, "success");
+		return this;
+	}
+	silly(...messages) {
+		this._new_log(messages, "silly");
+		return this;
+	}
+	json(...messages) {
+		this._new_log(messages, "json");
+		return this;
+	}
+	end(conclusion_log, conclusion_type) {
+		this._end_log(conclusion_log, conclusion_type);
+		return this;
+	}
+
+	// Setters
+	Title(title) {
+		this.title = title;
+		return this;
+	}
+	Save(save) {
+		this.save = save;
+		return this;
+	}
+	Path(path) {
+		this.path = path;
+		return this;
+	}
+	Timeout(timeout) {
+		this.timeout = timeout;
+		return this;
+	}
+
+	// Private Method
+   
+   _save_logs_block(logs_block){
+      // validate
+      if(!this.path) throw new Error("Path is required");
+      if(typeof this.path !== "string") throw new Error("Path must be a string");
+      if(!this.logs) throw new Error("Logs are required");
+      if(!Array.isArray(this.logs)) throw new Error("Logs must be an array");
+      if(this.logs.length === 0) throw new Error("Logs must have at least one log");
+      if(this.logs.some(log => !(log instanceof Log))) throw new Error("Logs must be an array of Log instances");
+
+      // logic  
+      const path_blocks = `${this.path}_blocks`;
+      fs.appendFileSync(path_blocks, logs_block);
       return this;
    }
-   Description(description) {
-      this.description = description;
-      return this;
-   }
-   Prompt(prompt) {
-      this.prompt = prompt;
-      return this;
-   }
-   Save(save) {
-      this.save = save;
-      return this;
-   }
-   Path(path) {
-      this.path = path;
-      return this;
-   }
-   Prefix(prefix) {
-      this.prefix = prefix;
-      return this;
-   }
+   _save_master_log(log){
+      // validate
+      if(!this.all_logs_path) throw new Error("all_logs_path is required");
+      if(typeof this.all_logs_path !== "string") throw new Error("all_logs_path must be a string");
+      if(!log) throw new Error("Log is required");
+      if(!(log instanceof Log)) throw new Error("Log must be an instance of Log");  
 
-   // Private Functions
-   _contruct_log(message, type = "info") {
-      // Construye un log
-      if(this.prefix) message = `${this.prefix}${message}`;
-      const now = new Date();
-      const style_log = this.style_log[type](message)
-      const simple_log = `${type}: ${message}`;
-      const now_iso = now.toISOString();
-      const out_log = `${style_log}${this.separator}${this.time ? `${now_iso}` : ""}`;
-      const simple_out_log = `${simple_log}${this.separator}${this.time ? `${now_iso}` : ""}`;
-      const log_data = {
-         id: this.id,
-         type: type,
-         message: message,
-         time: now,
-         out_log,
-         style_log,
-         simple_log,
-         simple_out_log
-      }
-      return log_data;
+      // logic
+      log = `\n${log.get_log()}`;
+      fs.ensureFileSync(this.all_logs_path);
+      fs.appendFileSync(this.all_logs_path, log);
    }
-   _log(message, type, time = true) {
-      // Guarda el log y lo imprime en consola
-      if (!message) return; // ? Debería lanzar un error si no hay mensaje? // Por ahora no
-      this.time_start = new Date(); // Inicia el tiempo
-      const log_data = this._contruct_log(message, type);
-      this._save(log_data);
-      console.log(log_data.out_log);
+   _build_logs_block(){
+      // validate
+      if(!this.logs) throw new Error("Logs are required");
+      if(!Array.isArray(this.logs)) throw new Error("Logs must be an array");
+      if(this.logs.length === 0) throw new Error("Logs must have at least one log");
+      if(this.logs.some(log => !(log instanceof Log))) throw new Error("Logs must be an array of Log instances");
+      if(!this.time_start) throw new Error("Time start is required");
+      if(!this.time_end) throw new Error("Time end is required");
+      if(!this.path) throw new Error("Path is required");
+      if(typeof this.path !== "string") throw new Error("Path must be a string");   
 
-      if(!time || this.auto_save) return; 
-      this._clear_timeout();
-      this._set_timeout();
+      // logic
+      const time_elapsed = this.time_end - this.time_start;
+      let logs_block = "";
+      logs_block+=`\n${this.separator_vertical}\n`;
+      logs_block+=`=== ${this.title} ===\n`;
+      logs_block+=`time_start: ${this.time_start}\n`;
+      logs_block+=`time_end: ${this.time_end}\n`;
+      logs_block+=`time_elapsed: ${time_elapsed}ms\n`;
+      logs_block+=`\n`;
+      logs_block+=this.logs.map(log => log.get_log()).join("\n");
+      logs_block+=`\n${this.separator_vertical}\n`;
+      return logs_block;
    }
-   _get_log_block() {
-      // Devuelve un bloque de logs
-      if (this.logs.length === 0) {
-         throw new Error("No logs to get");
-      }
-      const time = (this.time_end - this.time_start);
+   _end_log(conclusion_log, conclusion_type){
+      // validate
+      if(!conclusion_log) throw new Error("Conclusion log is required");
+      if(typeof conclusion_log !== "string") throw new Error("Conclusion log must be a string");
+      if(!conclusion_type) throw new Error("Conclusion type is required");
+      if(typeof conclusion_type !== "string") throw new Error("Conclusion type must be a string");
 
-      const log_block = {
-         id: this.id,
-         title: this.title,
-         logs: this.logs,
-         time_start: this.time_start,
-         time_end: this.time_end,
-         time: time,
-         conclusion_log: this.conclusion_log,
-         conclusion_type: this.conclusion_type,
-      }
-      return log_block;
-   }
-   _get_path(filename, format) {
-      const file = `${filename}.${format}`;
-      return `${this.path}/${file}`;
-   }
-   _get_filename() {
-      const filename = `${this.prefix ? `${this.prefix}_` : ""}${this.title}`;
-      return filename;
-   }
-
-   _format_block(format = "log") {
-      // Formatea un bloque de logs en el formato deseado (log, json, html, csv, etc)
-      // TODO: Implementar otros formatos
-      if (this.logs.length === 0) {
-         throw new Error("No logs to format");
-      }
-      let result = "";
-      const log_block = this._get_log_block();
-      const seconds = log_block.time / 1000;
-      if (format === "log") {
-         result += `${log_block.title}${this.separator}seconds: ${seconds}\n`;
-         if (log_block.conclusion_log) {
-            // Imprime el log de conclusión
-            const { style_log } = this._contruct_log(log_block.conclusion_log, log_block.conclusion_type);
-            result += `${style_log}\n`;
-         }
-         result += `\n` // Salto de línea
-         this.logs.forEach(log => {
-            result += `${log.simple_out_log}\n`;
-         });
-         if (!this.auto_save) result += `${this.separator_vertical}`; // No hay necesidad de separador si es auto_save porque no hay bloques
-      }
-      if (format === "json") {
-         result = JSON.stringify(log_block, null, 2);
-      }
-      return result;
-   }
-   _save(log_data, format = "log") {
-      // Guarda un log en memoria y si auto_save es true lo guarda en disco
-      this.logs.push(log_data); // Añade el log a la memoria
-      if (!this.auto_save) return; // Si no es auto_save no guarda en disco
-      const filename = this._get_filename();
-      const path = this._get_path(filename, format);
-      const data = this._format_block(format);
-      this._save_file(path, data);
-   }
-   _save_log_block(format = "log") {
-      // Guarda el bloque de logs
-      // const log_block = this._get_log_block(); // ? Quizá el log_block no sea necesario en la clase
-      if(!this.save) return; // No guarda si no está habilitado
-      if(this.auto_save) return; // Si es autosave no existe el bloque
-      const filename = this._get_filename()
-      const path = this._get_path(filename, format);
-      const data = this._format_block(format);
-      this._save_file(path, data);
-   }
-   _save_file(path, data, add = true) {
-      // Guarda un archivo en disco
-      path = path.replace(/:/g, '.');
-      // Comprueba si el o los folders existen y si no los crea
-      const folder = path.split("/").slice(0, -1).join("/");
-      const folder_exist = fs.existsSync(folder);
-      const file_exist = fs.existsSync(path);
-      function save(add, file_exist){
-         if(add && file_exist) fs.promises.appendFile(path, data)
-         else
-         fs.promises.writeFile(path, data);
-      }
-      if (!folder_exist) {
-         fs.promises.mkdir(folder, { recursive: true }).then(()=>{
-            save(add, file_exist)
-         })
-      }else{
-         save(add, file_exist)
-      }
-      return path;
-   }
-   _save_json_file(json) {
-      // Guarda un archivo en formato json
-      if (!this.save_json) return; // No guarda si no está habilitado
-      const filename = `temp/${uuid.v4()}`;
-      const path = this._get_path(filename, "json");
-      const json_data = JSON.stringify(json, null, 2);
-      return this._save_file(path, json_data, false);
-   }
-   _end_block(conclusion_log, conclusion_type = "info") {
-
-      this._clear_timeout();
- 
-      if (this.logs.length === 0) return; // Si no hay logs no hace nada
+      // logic
       this.time_end = new Date();
-      if (conclusion_log) {
-         this.conclusion_log = conclusion_log;
-         this.conclusion_type = conclusion_type;
-         this._log(conclusion_log, conclusion_type);
-      }
-      if (this.print_end) {
-         console.log(this._format_block());
-      }
-      if (this.save) {
-         this._save_log_block();
-      }
-      
-      this.time_start = new Date(); // Reinicia el tiempo
-   }
-   _clear_timeout() {
-      clearTimeout(this.set_timeout);
-   }
-   _set_timeout() {
-      if(this.auto_save) return; // No hay necesidad de timeout si es auto_save
-      if (this.timeout !== 0) this.set_timeout = setTimeout(() => this._end_block(), this.timeout);
-   }
-   _format_input_message(message) {
-      // Formatea el input de los mensajes
-      if (!message) return; // Si no hay mensaje no hace nada
-      let result = "";
-      if (typeof message === "object") {
-         result += `\n`; // Salto de línea
-         result += JSON.stringify(message, null, 2);
-         result += `\n`; // Salto de línea
-         result += this._save_json_file(message)||""; 
-      } else {
-         result = message;
-      }
-      return result;
-   }
+      this._new_log(conclusion_log, conclusion_type);
+      if(this.save){
+         // validate
+         if(this.logs.length === 0) throw new Error("Logs must have at least one log");
+         if(this.logs.some(log => !(log instanceof Log))) throw new Error("Logs must be an array of Log instances");
+         if(!this.time_start) throw new Error("Time start is required");
+         if(!this.time_end) throw new Error("Time end is required");
+         if(!this.path) throw new Error("Path is required");
+         if(typeof this.path !== "string") throw new Error("Path must be a string");
 
-   _input_message(...message) {
-      // Tratamiento del input de los mensajes
-      if (!(message?.length > 0)) return; // Si no hay mensaje no hace nada
-      let result = "";
-      message.forEach((msg, i) => {
-         if(msg)
-         result += `${this._format_input_message(msg)}${i < message.length - 1 ? " " : ""}`; // Añade un espacio si no es el último mensaje
-      });
-      return result;
-   }
-   // Functions
-   log(...message) {
-      message = this._input_message(...message)
-      this._log(message, "info");
+         // logic
+         const logs_block = this._build_logs_block();
+         this._save_logs_block(logs_block);
+      }
+      this._clean();
       return this;
    }
-   info(...message) {
-      message = this._input_message(...message)
-      this._log(message, "info");
-      return this;
+   _clean(){
+      this.logs = [];
+      this.time_start = null;
+      this.time_end = null;
+      clearTimeout(this.timer);
    }
-   warn(...message) {
-      message = this._input_message(...message)
-      this._log(message, "warn");
-      return this;
+   _start_timer(){
+      // validate
+      if(!this.timeout) throw new Error("Timeout is required");
+      if(typeof this.timeout !== "number") throw new Error("Timeout must be a number");
+      if(this.timeout < 0) throw new Error("Timeout must be a positive number");
+
+      // logic
+      if(this.timer) clearTimeout(this.timer);
+      this.time_start = this.time_start ? this.time_start : new Date(); // Si time_start existe, no se reinicia
+      this.timer = setTimeout(() => {
+         const conclusion_log = `${this.title} - Timeout watching logs ${this.timeout}ms`;
+         const conclusion_type = "info";
+         this._end_log(conclusion_log, conclusion_type);
+      }, this.timeout);
    }
-   error(...message) {
-      message = this._input_message(...message)
-      this._log(message, "error");
-      return this;
+   _build_path(){
+      // validate
+      this._validate_constructor();
+
+      // logic
+      let normalized_title = this.title;
+      normalized_title = normalized_title.trim();
+      normalized_title = normalized_title.replace(/[^\w\s-]/g, ''); // Elimina caracteres especiales
+      normalized_title = normalized_title.replace(/[\s\n\t]+/g, '_'); // Reemplaza espacios y saltos por _
+      normalized_title = normalized_title.replace(/-+/g, '_'); // Reemplaza guiones por _
+      normalized_title = normalized_title.replace(/_{2,}/g, '_'); // Elimina _ múltiples
+      normalized_title = normalized_title.toLowerCase();
+      normalized_title = normalized_title.replace(/^_+|_+$/g, ''); // Elimina _ al inicio y final
+      this.path = `${this.base_path}/${normalized_title}.log`;
+
+      return this.path;
    }
-   success(...message) {
-      message = this._input_message(...message)
-      this._log(message, "success");
-      return this;
+   _validate_constructor(){
+      if(!this.title) throw new Error("Title is required");
+      if(typeof this.title !== "string") throw new Error("Title must be a string");
+      if(!this.base_path) throw new Error("Base path is required");
+      if(typeof this.base_path !== "string") throw new Error("Base path must be a string");
+      if(this.timeout === undefined || isNaN(this.timeout) || this.timeout === null) throw new Error("Timeout is required");
+      if(typeof this.timeout !== "number") throw new Error("Timeout must be a number");
+      if(this.timeout < 0) throw new Error("Timeout must be a positive number");
+
    }
-   silly(...message) {
-      message = this._input_message(...message)
-      this._log(message, "silly");
-      return this;
-   }
-   json(...message) {
-      message = this._input_message(...message)// Cambia el separador por defecto
-      this._log(message, "json");
-      return this;
-   }
-   end(conclusion_log, conclusion_type) {
-      this._end_block(conclusion_log, conclusion_type);
-      return this;
-   }
+	_new_log(messages, type) {
+		//validate
+		if (!messages) throw new Error("Messages is required");
+		if (!(messages?.length > 0)) throw new Error("Messages is required");
+		if (!type) throw new Error("Type is required");
+
+		//logic
+      this._start_timer();
+
+		if (!Array.isArray(messages)) messages = [messages];
+		const log = new Log();
+		log.set_message(...messages)
+			.set_type(type)
+         .set_prefix(`${this.title} - `);
+      if(this.save) log.set_filepath(this.path);
+      log.run();
+
+      this.logs.push(log);
+      this._save_master_log(log);
+		return log;
+	}
 }
-
 
 module.exports = LOGGER;
