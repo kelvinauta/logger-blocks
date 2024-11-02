@@ -11,6 +11,10 @@ class LOGGER {
 		base_path = "./.logs", 
       all_logs_path = "./.logs/all_logs.log", 
 		timeout = 15000, // Tiempo por defecto para guardar un bloque de logs
+      
+      // TODO: Redundancia en Log.js
+      mode = "terminal", // "terminal" or "console" 
+      colorize = true, 
 	}) {
 		// Frequently user configuration
 		this.title = title; // Nombre del logger
@@ -18,7 +22,9 @@ class LOGGER {
 		this.timeout = timeout; // Tiempo de espera para guardar un bloque de logs
 		this.base_path = base_path; // Ruta donde se guardará el log
 		this.all_logs_path = all_logs_path; // Ruta donde se guardará el log de todos los logs
-
+      this.mode = mode;
+      this.colorize = colorize;
+      
 		// Default configuration
 		this.id = uuid.v4(); // ID del logger
 		this.separator = " | "; // Separador de logs
@@ -220,10 +226,13 @@ class LOGGER {
       this._start_timer();
 
 		if (!Array.isArray(messages)) messages = [messages];
-		const log = new Log();
+		const log = new Log({
+         mode: this.mode,
+         colorize: this.colorize,
+      });
 		log.set_message(...messages)
 			.set_type(type)
-         .set_prefix(`${this.title} - `);
+         .set_prefix(`${this.title} -`);
       if(this.save) log.set_filepath(this.path);
       log.run();
 

@@ -66,7 +66,8 @@ logger4
 console.log("\n=== Test 5: Logger múltiples mensajes ===");
 const logger5 = new LOGGER({
     title: "Logger Múltiple",
-    timeout: 3000
+    timeout: 3000,
+    colorize: false,
 });
 
 logger5
