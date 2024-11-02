@@ -43,6 +43,14 @@ logger
     .end("Authentication completed", "success");
 ```
 
+### Focused Logs
+
+```bash
+export FOCUS_LOGS=MAIN,TEST
+```
+This will only log logs with the title "MAIN" or "TEST".
+If `FOCUS_LOGS` is not set or is `ALL`, all logs will be logged.
+
 ### Auto-closing Blocks
 
 ```javascript

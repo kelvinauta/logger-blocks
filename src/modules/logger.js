@@ -150,6 +150,7 @@ class LOGGER {
       if(typeof conclusion_type !== "string") throw new Error("Conclusion type must be a string");
 
       // logic
+      if(!this._focus_log()) return;
       this.time_end = new Date();
       this._new_log(conclusion_log, conclusion_type);
       if(this.save){
@@ -222,7 +223,10 @@ class LOGGER {
 		if (!(messages?.length > 0)) throw new Error("Messages is required");
 		if (!type) throw new Error("Type is required");
 
+      
 		//logic
+      if(!this._focus_log()) return;
+
       this._start_timer();
 
 		if (!Array.isArray(messages)) messages = [messages];
@@ -240,6 +244,15 @@ class LOGGER {
       this._save_master_log(log);
 		return log;
 	}
+   _focus_log(){
+      let focus_logs = process.env.FOCUS_LOGS;
+      if(!focus_logs) return true;
+      focus_logs = focus_logs.split(",");
+      if(focus_logs.length === 0) return true;
+      if(focus_logs.includes("ALL")) return true;
+      if(focus_logs.includes(this.title)) return true;
+      return false;
+   }
 }
 
 module.exports = LOGGER;
