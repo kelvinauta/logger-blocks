@@ -1,7 +1,7 @@
 {
   "name": "tuki_logger",
   "author": "kelvinauta",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Logger simple",
   "main": "src/index.js",
   "scripts": {
