@@ -67,6 +67,10 @@ class LOGGER {
 		this._new_log(messages, "json");
 		return this;
 	}
+   status(status_log) {
+      this._new_log(status_log, "status");
+      return this;
+   }
 	end(conclusion_log, conclusion_type) {
 		this._end_log(conclusion_log, conclusion_type);
 		return this;
@@ -150,7 +154,7 @@ class LOGGER {
       if(typeof conclusion_type !== "string") throw new Error("Conclusion type must be a string");
 
       // logic
-      if(!this._focus_log()) return;
+      if(!this._env_focus_log()) return;
       this.time_end = new Date();
       this._new_log(conclusion_log, conclusion_type);
       if(this.save){
@@ -225,7 +229,7 @@ class LOGGER {
 
       
 		//logic
-      if(!this._focus_log()) return;
+      if(!this._env_focus_log()) return;
 
       this._start_timer();
 
@@ -244,7 +248,7 @@ class LOGGER {
       this._save_master_log(log);
 		return log;
 	}
-   _focus_log(){
+   _env_focus_log(){
       let focus_logs = process.env.FOCUS_LOGS;
       if(!focus_logs) return true;
       focus_logs = focus_logs.split(",");

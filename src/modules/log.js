@@ -140,7 +140,7 @@ class Log {
 		console.log(text);
 	}
 	_print_terminal_log(text) {
-		this.terminal.add_line(text);
+		if(this.log_data.type !== "status") this.terminal.add_line(text);
 		this.terminal.update_status(text);
 	}
 	_append() {

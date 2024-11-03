@@ -7,6 +7,7 @@ class STYLE_LOG {
 		this.pre_error = "error: ";
 		this.pre_success = "success: ";
 		this.pre_silly = "silly: ";
+		this.pre_status = "status: ";
 		this.pre_json = "json: ";
 		this.all_color = all_color;
 		this.text;
@@ -48,6 +49,12 @@ class STYLE_LOG {
 		this.text = text;
 		this.all_color = all_color;
 		const result = this._chalk_result("pre_silly", "magenta");
+		return result;
+	}
+	status(text, all_color) {
+		this.text = text;
+		this.all_color = all_color;
+		const result = this._chalk_result("pre_status", "cyan");
 		return result;
 	}
 	json(text, all_color) {

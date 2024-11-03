@@ -49,6 +49,16 @@ logger3
     .warn("Esperando 2 segundos...")
     .silly("Mensaje tonto mientras esperamos");
 
+const status_generator = (function* (){   
+    let i = 0;
+    while(true){
+        yield i++;
+    }
+})();
+
+setInterval(() => {
+    logger3.status(`Ciclo ${status_generator.next().value}`);
+}, 1000);
 // Ejemplo 4: Logger sin guardado
 console.log("\n=== Test 4: Logger sin guardado ===");
 const logger4 = new LOGGER({
@@ -69,7 +79,6 @@ const logger5 = new LOGGER({
     timeout: 3000,
     colorize: false,
 });
-
 logger5
     .info("Primer mensaje", "Segundo mensaje", "Tercer mensaje")
     .warn("Advertencia 1", "Advertencia 2")
